@@ -1,6 +1,7 @@
 const Helper = require('../../../../__fixtures__/unit/helper')
 const owners = require('../../../../lib/validators/options_processor/owners')
 const teams = require('../../../../lib/validators/options_processor/teams')
+const { when } = require('jest-when')
 
 jest.mock('../../../../lib/validators/options_processor/teams', () => ({
   extractTeamMemberships: jest.fn()
@@ -170,9 +171,7 @@ test('teams owners are processed correctly', async () => {
   teams.extractTeamMemberships = jest.fn().mockReturnValue(approvedReviewers)
 
   const res = await owners.process(createMockPR(), createMockContext(codeowner, commitDiffs), approvedReviewers)
-  expect(res.length).toBe(2)
-  expect(res[0]).toBe('teamMember1')
-  expect(res[1]).toBe('member2')
+  expect(res.length).toBe(0)
 })
 
 test('non-team member cannot approve the PR', async () => {
@@ -184,7 +183,7 @@ test('non-team member cannot approve the PR', async () => {
   teams.extractTeamMemberships = jest.fn().mockReturnValue(approvedReviewers)
 
   const res = await owners.process(createMockPR(), createMockContext(codeowner, commitDiffs), approvedReviewers)
-  expect(reviewer).not.toEqual(expect.arrayContaining(res))
+  expect(res).toEqual(expect.not.arrayContaining(reviewer))
 })
 
 test('teams owners and individuals are processed correctly', async () => {
@@ -198,6 +197,38 @@ test('teams owners and individuals are processed correctly', async () => {
   expect(res[0]).toBe('teamMember1')
   expect(res[1]).toBe('member2')
   expect(res[2]).toBe('hope')
+})
+
+test('Multiple files with different codeowners are processed correctly', async () => {
+  const codeowner = '/docs/ @hope \n/apps/ @bob'
+  const commitDiffs = createCommitDiffs(['/docs/test.js', '/apps/main.js'])
+
+  const res = await owners.process(createMockPR(), createMockContext(codeowner, commitDiffs))
+  expect(res.length).toBe(2)
+  expect(res).toEqual(expect.arrayContaining(['bob', 'hope']))
+})
+
+test('Multiple files with different codeowners are processed correctly', async () => {
+  const codeowner = '/docs/ @hope \n/apps/ @bob'
+  const commitDiffs = createCommitDiffs(['/docs/test.js', '/apps/main.js'])
+
+  const res = await owners.process(createMockPR(), createMockContext(codeowner, commitDiffs), ['bob'])
+  expect(res.length).toBe(1)
+  expect(res).toEqual(expect.arrayContaining(['hope']))
+})
+
+test('Multiple files with different codeowners are processed correctly carazy', async () => {
+  const codeowner = '/docs/ @hope/test-team \n/apps/ @hope/test-team @bob/test-team'
+  const commitDiffs = createCommitDiffs(['/docs/test.js', '/apps/main.js'])
+
+  teams.extractTeamMemberships = jest.fn()
+  when(teams.extractTeamMemberships)
+    .calledWith(expect.anything(), ['hope/test-team'], undefined).mockReturnValue(['member1', 'member2'])
+    .calledWith(expect.anything(), ['hope/test-team', 'bob/test-team'], undefined).mockReturnValue(['member1', 'member2', 'member3', 'member4'])
+
+  const res = await owners.process(createMockPR(), createMockContext(codeowner, commitDiffs))
+  expect(res.length).toBe(4)
+  expect(res).toEqual(expect.arrayContaining(['member1', 'member2', 'member3', 'member4']))
 })
 
 const createMockPR = () => {

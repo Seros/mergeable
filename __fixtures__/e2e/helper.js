@@ -58,8 +58,10 @@ class MockHelper {
   mockPRListFileCall (options = {}) {
     const response = options.response ? options.response : prListFilesResponse
     const path = `/repos/${this.repo.owner.login}/${this.repo.name}/pulls/${this.payload.number}/files`
+    const times = options.times || 1
     return nock('https://api.github.com')
       .get(path)
+      .times(times)
       .reply(200, response)
   }
 
